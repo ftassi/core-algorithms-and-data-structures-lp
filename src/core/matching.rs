@@ -1,6 +1,9 @@
 use std::collections::{BTreeMap, BinaryHeap};
 
-use crate::{core::{Order, Receipt, Side}, errors::ApplicationError};
+use crate::{
+    core::{Order, Receipt, Side},
+    errors::ApplicationError,
+};
 
 use super::PartialOrder;
 
@@ -35,7 +38,7 @@ impl MatchingEngine {
         // Increment the ordinal number for this order
         self.ordinal += 1;
         let ordinal = self.ordinal;
-        
+
         let original_amount = order.amount;
         let mut partial = order.into_partial_order(ordinal, original_amount);
 
@@ -96,7 +99,7 @@ impl MatchingEngine {
                     // 1 remove the Order with the lowest sequence nr from the orderbook entry
                     // 2 check if it's your own order
                     // 3 subtract the amount from your current order and decide
-                    //   a. is there anything left from the match? split the Order into two and put one back into the orderbook entry 
+                    //   a. is there anything left from the match? split the Order into two and put one back into the orderbook entry
                     //   b. if nothing is left, add the full order to your matches and continue from 1
                     todo!()
                 }
@@ -249,7 +252,7 @@ mod tests {
         assert_eq!(charlie_receipt.matches, vec![]);
         assert_eq!(charlie_receipt.ordinal, 2);
 
-        let bob_receipt = matching_engine
+        let alice_receipt = matching_engine
             .process(Order {
                 price: 10,
                 amount: 2,
@@ -259,7 +262,7 @@ mod tests {
             .unwrap();
 
         assert_eq!(
-            bob_receipt.matches,
+            alice_receipt.matches,
             vec![PartialOrder {
                 price: 10,
                 amount: 1,

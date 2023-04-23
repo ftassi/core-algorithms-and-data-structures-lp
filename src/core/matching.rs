@@ -46,7 +46,17 @@ impl MatchingEngine {
         let receipt = match &partial.side {
             Side::Buy => {
                 // Implement this side of the matching!
-                todo!();
+                let orderbook_entry = self.asks.range_mut(u64::MIN..=partial.price);
+                let receipt = MatchingEngine::match_order(&partial, orderbook_entry, ordinal)?;
+                let matched_amount: u64 = receipt.matches.iter().map(|m| m.amount).sum();
+                if matched_amount < original_amount {
+                    partial.amount = original_amount - matched_amount;
+                    let price = partial.price;
+                    let bids = self.bids.entry(price).or_insert(vec![].into());
+                    bids.push(partial);
+                }
+
+                receipt
             }
             Side::Sell => {
                 // Fetch all orders in the expected price range from this side of the orderbook
@@ -95,13 +105,25 @@ impl MatchingEngine {
         'outer: while remaining_amount > 0 {
             // The iterator contains all orderbook_entry of a price point
             match orderbook_entry.next() {
-                Some((price, orderbook_entry)) => {
+                Some((_price, orderbook_entry)) => {
                     // 1 remove the Order with the lowest sequence nr from the orderbook entry
                     // 2 check if it's your own order
                     // 3 subtract the amount from your current order and decide
                     //   a. is there anything left from the match? split the Order into two and put one back into the orderbook entry
                     //   b. if nothing is left, add the full order to your matches and continue from 1
-                    todo!()
+                    if let Some(first) = orderbook_entry.pop() {
+                        if first.signer != order.signer {
+                            remaining_amount -= first.amount;
+                            matches.push(PartialOrder {
+                                price: first.price,
+                                amount: first.amount,
+                                side: first.side,
+                                signer: first.signer,
+                                ordinal: first.ordinal,
+                                remaining: 0,
+                            })
+                        }
+                    }
                 }
                 // Nothing left to match with
                 None => break 'outer,

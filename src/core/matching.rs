@@ -111,17 +111,22 @@ impl MatchingEngine {
                     // 3 subtract the amount from your current order and decide
                     //   a. is there anything left from the match? split the Order into two and put one back into the orderbook entry
                     //   b. if nothing is left, add the full order to your matches and continue from 1
-                    if let Some(first) = orderbook_entry.pop() {
-                        if first.signer != order.signer {
-                            remaining_amount -= first.amount;
-                            matches.push(PartialOrder {
-                                price: first.price,
-                                amount: first.amount,
-                                side: first.side,
-                                signer: first.signer,
-                                ordinal: first.ordinal,
-                                remaining: 0,
-                            })
+                    'inner: while remaining_amount > 0 {
+                        match orderbook_entry.pop() {
+                            Some(current) => {
+                                if current.signer != order.signer {
+                                    remaining_amount -= current.amount;
+                                    matches.push(PartialOrder {
+                                        price: current.price,
+                                        amount: current.amount,
+                                        side: current.side,
+                                        signer: current.signer,
+                                        ordinal: current.ordinal,
+                                        remaining: 0,
+                                    })
+                                }
+                            }
+                            None => break 'inner,
                         }
                     }
                 }

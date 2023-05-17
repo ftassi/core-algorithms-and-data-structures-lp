@@ -154,7 +154,40 @@ mod tests {
     #[test]
     fn test_MatchingEngine_process_partially_match_order() {
         // Immplement me
-        todo!();
+        let mut matching_engine = MatchingEngine::new();
+        let alice_receipt = matching_engine
+            .process(Order {
+                price: 10,
+                amount: 1,
+                side: Side::Sell,
+                signer: "ALICE".to_string(),
+            })
+            .unwrap();
+
+        assert_eq!(alice_receipt.matches, vec![]);
+        assert_eq!(alice_receipt.ordinal, 1);
+
+        let bob_receipt = matching_engine
+            .process(Order {
+                price: 10,
+                amount: 2,
+                side: Side::Buy,
+                signer: "BOB".to_string(),
+            })
+            .unwrap();
+
+        assert_eq!(bob_receipt.ordinal, 2);
+        assert_eq!(
+            bob_receipt.matches,
+            vec![PartialOrder {
+                amount: 1,
+                remaining: 0,
+                ordinal: 1,
+                price: 10,
+                side: Side::Sell,
+                signer: "ALICE".to_string(),
+            }]
+        );
     }
 
     #[test]

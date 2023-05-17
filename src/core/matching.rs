@@ -111,6 +111,7 @@ impl MatchingEngine {
                     // 3 subtract the amount from your current order and decide
                     //   a. is there anything left from the match? split the Order into two and put one back into the orderbook entry
                     //   b. if nothing is left, add the full order to your matches and continue from 1
+                    let mut self_order: BinaryHeap<PartialOrder> = BinaryHeap::new();
                     'inner: while remaining_amount > 0 {
                         match orderbook_entry.pop() {
                             Some(current) => {
@@ -124,9 +125,14 @@ impl MatchingEngine {
                                         ordinal: current.ordinal,
                                         remaining: 0,
                                     })
+                                } else {
+                                    self_order.push(current);
                                 }
                             }
-                            None => break 'inner,
+                            None => {
+                                orderbook_entry.append(&mut self_order);
+                                break 'inner;
+                            }
                         }
                     }
                 }

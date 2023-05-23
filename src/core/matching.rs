@@ -1,4 +1,7 @@
-use std::collections::{BTreeMap, BinaryHeap};
+use std::{
+    collections::{BTreeMap, BinaryHeap},
+    thread::current,
+};
 
 use crate::{
     core::{Order, Receipt, Side},
@@ -51,6 +54,7 @@ impl MatchingEngine {
                 let matched_amount: u64 = receipt.matches.iter().map(|m| m.amount).sum();
                 if matched_amount < original_amount {
                     partial.amount = original_amount - matched_amount;
+                    partial.remaining = original_amount - matched_amount;
                     let price = partial.price;
                     let bids = self.bids.entry(price).or_insert(vec![].into());
                     bids.push(partial);
@@ -116,15 +120,18 @@ impl MatchingEngine {
                         match orderbook_entry.pop() {
                             Some(current) => {
                                 if current.signer != order.signer {
-                                    remaining_amount -= current.amount;
+                                    let matched_amount =
+                                        std::cmp::min(remaining_amount, current.remaining);
                                     matches.push(PartialOrder {
                                         price: current.price,
                                         amount: current.amount,
-                                        side: current.side,
-                                        signer: current.signer,
+                                        side: current.side.clone(),
+                                        signer: current.signer.clone(),
                                         ordinal: current.ordinal,
-                                        remaining: 0,
-                                    })
+                                        remaining: current.remaining - matched_amount,
+                                    });
+
+                                    remaining_amount -= current.remaining;
                                 } else {
                                     self_order.push(current);
                                 }
@@ -148,6 +155,8 @@ impl MatchingEngine {
 mod tests {
     // reduce the warnings for naming tests
     #![allow(non_snake_case)]
+
+    use std::assert_eq;
 
     use super::*;
 
@@ -187,6 +196,21 @@ mod tests {
                 side: Side::Sell,
                 signer: "ALICE".to_string(),
             }]
+        );
+
+        let bob_bid = matching_engine.bids.get_mut(&10).unwrap().pop().unwrap();
+        assert_eq!(matching_engine.asks.len(), 0);
+        assert_eq!(matching_engine.bids.len(), 1);
+        assert_eq!(
+            bob_bid,
+            PartialOrder {
+                amount: 1,
+                remaining: 1,
+                ordinal: 2,
+                price: 10,
+                side: Side::Buy,
+                signer: "BOB".to_string(),
+            }
         );
     }
 

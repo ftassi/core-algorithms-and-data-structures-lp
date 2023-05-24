@@ -3,20 +3,24 @@ use std::collections::HashMap;
 use crate::{
     accounting::Accounts,
     core::{MatchingEngine, Order, PartialOrder, Receipt, Side},
-    errors::{ApplicationError, ApplicationError},
+    errors::ApplicationError,
     tx::Tx,
 };
 
 /// The core of the core: the [`TradingPlatform`]. Manages accounts, validates-, and orchestrates the processing of each order.
 pub struct TradingPlatform {
-    todo!();
+    matching_engine: MatchingEngine,
+    accounts: Accounts,
+    transactions: Vec<Tx>,
 }
 
 impl TradingPlatform {
     /// Creates a new instance without any data.
     pub fn new() -> Self {
         TradingPlatform {
-            todo!();
+            matching_engine: MatchingEngine::new(),
+            accounts: Accounts::new(),
+            transactions: vec![],
         }
     }
 
@@ -52,7 +56,17 @@ impl TradingPlatform {
 
     /// Process a given order and apply the outcome to the accounts involved. Note that there are very few safeguards in place.
     pub fn order(&mut self, order: Order) -> Result<Receipt, ApplicationError> {
-        todo!();
+        self.accounts
+            .balance_of(&order.signer)
+            .and_then(|balance| {
+                balance.checked_sub(order.price * order.amount).ok_or(
+                    ApplicationError::AccountUnderFunded(order.signer, order.price * order.amount),
+                )
+            })
+            .map(|_| Receipt {
+                matches: vec![],
+                ordinal: 1,
+            })
     }
 }
 
@@ -64,7 +78,6 @@ mod tests {
     use super::*;
 
     #[test]
-    #[ignore]
     fn test_TradingPlatform_order_requires_deposit_to_order() {
         let mut trading_platform = TradingPlatform::new();
 
@@ -76,6 +89,29 @@ mod tests {
                 signer: "ALICE".to_string(),
             }),
             Err(ApplicationError::AccountNotFound("ALICE".to_string()))
+        );
+        assert!(trading_platform.matching_engine.asks.is_empty());
+        assert!(trading_platform.matching_engine.bids.is_empty());
+    }
+    #[test]
+    fn test_TradingPlatform_requires_solvency_in_order_to_buy() {
+        let mut trading_platform = TradingPlatform::new();
+        trading_platform
+            .accounts
+            .deposit("ALICE", 50)
+            .expect("Unable to deposit");
+
+        assert_eq!(
+            trading_platform.order(Order {
+                price: 30,
+                amount: 2,
+                side: Side::Buy,
+                signer: "ALICE".to_string(),
+            }),
+            Err(ApplicationError::AccountUnderFunded(
+                "ALICE".to_string(),
+                60
+            ))
         );
         assert!(trading_platform.matching_engine.asks.is_empty());
         assert!(trading_platform.matching_engine.bids.is_empty());

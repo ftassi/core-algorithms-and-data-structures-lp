@@ -1,3 +1,4 @@
+#![allow(dead_code, unused_imports, unused)]
 use std::io;
 mod accounting;
 mod core;

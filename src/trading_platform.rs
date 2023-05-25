@@ -56,17 +56,45 @@ impl TradingPlatform {
 
     /// Process a given order and apply the outcome to the accounts involved. Note that there are very few safeguards in place.
     pub fn order(&mut self, order: Order) -> Result<Receipt, ApplicationError> {
-        self.accounts
+        match self
+            .accounts
             .balance_of(&order.signer)
             .and_then(|balance| {
                 balance.checked_sub(order.price * order.amount).ok_or(
-                    ApplicationError::AccountUnderFunded(order.signer, order.price * order.amount),
+                    ApplicationError::AccountUnderFunded(
+                        order.signer.clone(),
+                        order.price * order.amount,
+                    ),
                 )
             })
-            .map(|_| Receipt {
-                matches: vec![],
-                ordinal: 1,
-            })
+            .and_then(|_| self.matching_engine.process(order))
+        {
+            Ok(receipt) => {
+                let amount =
+                    receipt
+                        .matches
+                        .iter()
+                        .fold(Some(u64::from(0)), |acc, partial_order| {
+                            partial_order
+                                .amount
+                                .checked_mul(partial_order.price)
+                                .zip(acc)
+                                .and_then(|(a, b)| a.checked_add(b))
+                        });
+
+                match order.side {Side::Sell => {
+                    //sto vedendo, devo depositare il totale sul mio conto
+                    //e addebitare ad ogni acquirente
+                    self.accounts.deposit(order.signer, amount);
+                }, Side::Buy {
+                    //sto comprando, devo addebitare sul mio conto 
+                    //e accreditare su ogni venditore
+                    self.accounts.withdraw(order.signer, amount);
+                }}
+                Ok(receipt)
+            }
+            Err(err) => Err(err),
+        }
     }
 }
 

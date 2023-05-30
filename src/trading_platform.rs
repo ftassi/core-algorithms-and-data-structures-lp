@@ -56,7 +56,7 @@ impl TradingPlatform {
 
     /// Process a given order and apply the outcome to the accounts involved. Note that there are very few safeguards in place.
     pub fn order(&mut self, order: Order) -> Result<Receipt, ApplicationError> {
-        match self
+        self
             .accounts
             .balance_of(&order.signer)
             .and_then(|balance| {
@@ -67,34 +67,16 @@ impl TradingPlatform {
                     ),
                 )
             })
-            .and_then(|_| self.matching_engine.process(order))
-        {
-            Ok(receipt) => {
-                let amount =
-                    receipt
-                        .matches
-                        .iter()
-                        .fold(Some(u64::from(0)), |acc, partial_order| {
-                            partial_order
-                                .amount
-                                .checked_mul(partial_order.price)
-                                .zip(acc)
-                                .and_then(|(a, b)| a.checked_add(b))
-                        });
-
-                match order.side {Side::Sell => {
-                    //sto vedendo, devo depositare il totale sul mio conto
-                    //e addebitare ad ogni acquirente
-                    self.accounts.deposit(order.signer, amount);
-                }, Side::Buy {
-                    //sto comprando, devo addebitare sul mio conto 
-                    //e accreditare su ogni venditore
-                    self.accounts.withdraw(order.signer, amount);
-                }}
+            .and_then(|_| self.matching_engine.process(order.clone()))
+            .and_then(|receipt| {
+                receipt.matches.iter().for_each(|partial_order_match| {
+                    match partial_order_match.side {
+                        Side::Buy => self.accounts.send(&partial_order_match.signer, &order.signer, partial_order_match.price *partial_order_match.amount),
+                        Side::Sell => self.accounts.send(&order.signer, &partial_order_match.signer, partial_order_match.price *partial_order_match.amount),
+                    };
+                });
                 Ok(receipt)
-            }
-            Err(err) => Err(err),
-        }
+            })
     }
 }
 

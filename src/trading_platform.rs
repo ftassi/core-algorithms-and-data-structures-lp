@@ -58,10 +58,12 @@ impl TradingPlatform {
 
     /// Process a given order and apply the outcome to the accounts involved. Note that there are very few safeguards in place.
     pub fn order(&mut self, order: Order) -> Result<Receipt, ApplicationError> {
-        self
-            .accounts
+        self.accounts
             .balance_of(&order.signer)
             .and_then(|balance| {
+                if (order.side == Side::Sell) {
+                    return Ok(order.price * order.amount);
+                }
                 balance.checked_sub(order.price * order.amount).ok_or(
                     ApplicationError::AccountUnderFunded(
                         order.signer.clone(),
@@ -73,8 +75,16 @@ impl TradingPlatform {
             .and_then(|receipt| {
                 receipt.matches.iter().for_each(|partial_order_match| {
                     match partial_order_match.side {
-                        Side::Buy => self.accounts.send(&partial_order_match.signer, &order.signer, partial_order_match.price *partial_order_match.amount),
-                        Side::Sell => self.accounts.send(&order.signer, &partial_order_match.signer, partial_order_match.price *partial_order_match.amount),
+                        Side::Buy => self.accounts.send(
+                            &partial_order_match.signer,
+                            &order.signer,
+                            partial_order_match.price * partial_order_match.amount,
+                        ),
+                        Side::Sell => self.accounts.send(
+                            &order.signer,
+                            &partial_order_match.signer,
+                            partial_order_match.price * partial_order_match.amount,
+                        ),
                     };
                 });
                 Ok(receipt)
@@ -105,6 +115,7 @@ mod tests {
         assert!(trading_platform.matching_engine.asks.is_empty());
         assert!(trading_platform.matching_engine.bids.is_empty());
     }
+
     #[test]
     fn test_TradingPlatform_requires_solvency_in_order_to_buy() {
         let mut trading_platform = TradingPlatform::new();
@@ -126,6 +137,28 @@ mod tests {
             ))
         );
         assert!(trading_platform.matching_engine.asks.is_empty());
+        assert!(trading_platform.matching_engine.bids.is_empty());
+    }
+
+    #[test]
+    fn test_TradingPlatform_do_not_requires_solvency_in_order_to_sell() {
+        let mut trading_platform = TradingPlatform::new();
+        trading_platform
+            .accounts
+            .deposit("ALICE", 50)
+            .expect("Unable to deposit");
+
+        let alice_receipt = trading_platform
+            .order(Order {
+                price: 30,
+                amount: 2,
+                side: Side::Sell,
+                signer: "ALICE".to_string(),
+            })
+            .unwrap();
+
+        assert_eq!(alice_receipt.matches, vec![]);
+        assert_eq!(trading_platform.matching_engine.asks.len(), 1);
         assert!(trading_platform.matching_engine.bids.is_empty());
     }
 

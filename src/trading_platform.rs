@@ -62,6 +62,9 @@ impl TradingPlatform {
             .accounts
             .balance_of(&order.signer)
             .and_then(|balance| {
+                if order.side == Side::Sell {
+                    return Ok(order.price * order.amount)
+                }
                 balance.checked_sub(order.price * order.amount).ok_or(
                     ApplicationError::AccountUnderFunded(
                         order.signer.clone(),
@@ -105,6 +108,7 @@ mod tests {
         assert!(trading_platform.matching_engine.asks.is_empty());
         assert!(trading_platform.matching_engine.bids.is_empty());
     }
+
     #[test]
     fn test_TradingPlatform_requires_solvency_in_order_to_buy() {
         let mut trading_platform = TradingPlatform::new();
@@ -126,6 +130,26 @@ mod tests {
             ))
         );
         assert!(trading_platform.matching_engine.asks.is_empty());
+        assert!(trading_platform.matching_engine.bids.is_empty());
+    }
+
+    #[test]
+    fn test_TradingPlatform_do_not_requires_solvency_in_order_to_sell() {
+        let mut trading_platform = TradingPlatform::new();
+        trading_platform
+            .accounts
+            .deposit("ALICE", 50)
+            .expect("Unable to deposit");
+
+        let order = trading_platform.order(Order {
+                price: 30,
+                amount: 2,
+                side: Side::Sell,
+                signer: "ALICE".to_string(),
+            }).unwrap();
+
+        assert_eq!(order.matches, vec![]);
+        assert_eq!(trading_platform.matching_engine.asks.len(), 1);
         assert!(trading_platform.matching_engine.bids.is_empty());
     }
 

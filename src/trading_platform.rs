@@ -26,10 +26,9 @@ impl TradingPlatform {
 
     /// Fetches the complete order book at this time
     pub fn orderbook(&self) -> Vec<PartialOrder> {
-        let asks: Vec<PartialOrder> = self.matching_engine.asks.values().flatten().into_iter().collect();
-        let bids: Vec<PartialOrder> = self.matching_engine.bids.values().flatten().collect();
-        bids.append(asks);
-        bids
+        let asks = self.matching_engine.asks.values().flatten().cloned();
+        let bids = self.matching_engine.bids.values().flatten().cloned();
+        bids.chain(asks).collect()
     }
 
     /// Withdraw funds

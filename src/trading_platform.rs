@@ -59,15 +59,7 @@ impl TradingPlatform {
     /// Process a given order and apply the outcome to the accounts involved. Note that there are very few safeguards in place.
     pub fn order(&mut self, order: Order) -> Result<Receipt, ApplicationError> {
         self.accounts
-            .balance_of(&order.signer)
-            .and_then(|signer_balance| {
-                signer_balance
-                    .checked_sub(order.required_fund_to_fulfill().unwrap_or(0))
-                    .ok_or(ApplicationError::AccountUnderFunded(
-                        order.signer.clone(),
-                        order.price * order.amount,
-                    ))
-            })
+            .is_solvent(&order.signer, order.required_fund_to_fulfill().unwrap_or(0))
             .and_then(|_| self.matching_engine.process(order.clone()))
             .and_then(|receipt| {
                 receipt.matches.iter().for_each(|partial_order_match| {

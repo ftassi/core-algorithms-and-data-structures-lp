@@ -22,6 +22,17 @@ impl Accounts {
             .ok_or(ApplicationError::AccountNotFound(signer.to_string()))
     }
 
+    pub fn is_solvent(&self, signer: &str, amount: u64) -> Result<u64, ApplicationError> {
+        self.balance_of(signer).and_then(|balance| {
+            balance
+                .checked_sub(amount)
+                .map(|_| amount)
+                .ok_or(ApplicationError::AccountUnderFunded(
+                    signer.to_string(),
+                    amount,
+                ))
+        })
+    }
     /// Either deposits the `amount` provided into the `signer` account or adds the amount to the existing account.
     /// # Errors
     /// Attempted overflow
@@ -248,5 +259,25 @@ mod tests {
                 .into_iter()
                 .collect();
         assert_eq!(accounts.accounts, expected);
+    }
+
+    #[test]
+    fn test_accounts_can_check_solvency() {
+        let mut accounts = Accounts::new();
+        accounts.deposit("Alice", 100).expect("Couldn't deposit");
+
+        assert_eq!(
+            accounts.is_solvent("Bob", 200),
+            Err(ApplicationError::AccountNotFound("Bob".to_string()))
+        );
+
+        assert_eq!(
+            accounts.is_solvent("Alice", 200),
+            Err(ApplicationError::AccountUnderFunded(
+                "Alice".to_string(),
+                200
+            ))
+        );
+        assert_eq!(accounts.is_solvent("Alice", 75), Ok(75));
     }
 }

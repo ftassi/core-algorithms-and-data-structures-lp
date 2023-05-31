@@ -61,17 +61,7 @@ impl TradingPlatform {
         self
             .accounts
             .balance_of(&order.signer)
-            .and_then(|balance| {
-                if order.side == Side::Sell {
-                    return Ok(order.price * order.amount)
-                }
-                balance.checked_sub(order.price * order.amount).ok_or(
-                    ApplicationError::AccountUnderFunded(
-                        order.signer.clone(),
-                        order.price * order.amount,
-                    ),
-                )
-            })
+            .and_then(|balance| order.solvable_for(balance))
             .and_then(|_| self.matching_engine.process(order.clone()))
             .and_then(|receipt| {
                 receipt.matches.iter().for_each(|partial_order_match| {

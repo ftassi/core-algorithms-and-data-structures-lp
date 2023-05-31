@@ -1,5 +1,7 @@
 use std::cmp::Reverse;
 
+use crate::errors;
+
 /// Simplified side of a position as well as order.
 #[derive(Clone, PartialOrd, PartialEq, Eq, Debug, Ord)]
 pub enum Side {
@@ -41,6 +43,18 @@ impl Order {
             ordinal,
         }
     }
+
+    pub fn solvable_for(&self, balance: &u64) -> Result<u64, errors::ApplicationError> {
+        if self.side == Side::Sell {
+            return Ok(self.price * self.amount)
+        }
+        balance.checked_sub(self.price * self.amount).ok_or(
+            errors::ApplicationError::AccountUnderFunded(
+                self.signer.clone(),
+                self.price * self.amount,
+            ),
+        )
+    }
 }
 
 /// A position represents an unfilled order that is kept in the system for later filling.
@@ -78,7 +92,7 @@ pub struct Receipt {
 }
 
 impl PartialOrder {
-    
+
     /// Splits one [`PartialOrder`] into two by taking a defined `take` amount
     pub fn take_from(pos: &mut PartialOrder, take: u64, price: u64) -> PartialOrder {
         pos.remaining -= take;

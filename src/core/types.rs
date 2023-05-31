@@ -23,7 +23,6 @@ pub struct Order {
 }
 
 impl Order {
-
     /// Convert an [`Order`] into a [`PartialOrder`] with the added parameters
     pub fn into_partial_order(self, ordinal: u64, remaining: u64) -> PartialOrder {
         let Order {
@@ -39,6 +38,13 @@ impl Order {
             side,
             signer,
             ordinal,
+        }
+    }
+
+    pub fn required_fund_to_fulfill(&self) -> Option<u64> {
+        match self.side {
+            Side::Sell => None,
+            Side::Buy => self.amount.checked_mul(self.price),
         }
     }
 }
@@ -78,7 +84,6 @@ pub struct Receipt {
 }
 
 impl PartialOrder {
-    
     /// Splits one [`PartialOrder`] into two by taking a defined `take` amount
     pub fn take_from(pos: &mut PartialOrder, take: u64, price: u64) -> PartialOrder {
         pos.remaining -= take;
@@ -86,5 +91,33 @@ impl PartialOrder {
         new.amount = take;
         new.price = price;
         new
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sell_order_do_not_require_fund_to_be_fullfilled() {
+        let order = Order {
+            price: 10,
+            amount: 5,
+            side: Side::Sell,
+            signer: "BOB".to_string(),
+        };
+
+        assert_eq!(order.required_fund_to_fulfill(), None);
+    }
+    #[test]
+    fn buy_order_do_require_fund_to_be_fullfilled() {
+        let order = Order {
+            price: 10,
+            amount: 5,
+            side: Side::Buy,
+            signer: "BOB".to_string(),
+        };
+
+        assert_eq!(order.required_fund_to_fulfill(), Some(50));
     }
 }

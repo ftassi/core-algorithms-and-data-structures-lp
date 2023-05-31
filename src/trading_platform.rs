@@ -60,16 +60,13 @@ impl TradingPlatform {
     pub fn order(&mut self, order: Order) -> Result<Receipt, ApplicationError> {
         self.accounts
             .balance_of(&order.signer)
-            .and_then(|balance| {
-                if (order.side == Side::Sell) {
-                    return Ok(order.price * order.amount);
-                }
-                balance.checked_sub(order.price * order.amount).ok_or(
-                    ApplicationError::AccountUnderFunded(
+            .and_then(|signer_balance| {
+                signer_balance
+                    .checked_sub(order.required_fund_to_fulfill().unwrap_or(0))
+                    .ok_or(ApplicationError::AccountUnderFunded(
                         order.signer.clone(),
                         order.price * order.amount,
-                    ),
-                )
+                    ))
             })
             .and_then(|_| self.matching_engine.process(order.clone()))
             .and_then(|receipt| {

@@ -22,11 +22,11 @@ impl Accounts {
             .ok_or(ApplicationError::AccountNotFound(signer.to_string()))
     }
 
-    pub fn is_solvent(&self, signer: &str, amount: u64) -> Result<u64, ApplicationError> {
+    pub fn is_solvent(&self, signer: &str, amount: u64) -> Result<(), ApplicationError> {
         self.balance_of(signer).and_then(|balance| {
             balance
                 .checked_sub(amount)
-                .map(|_| amount)
+                .map(|_| ())
                 .ok_or(ApplicationError::AccountUnderFunded(
                     signer.to_string(),
                     amount,
@@ -278,6 +278,6 @@ mod tests {
                 200
             ))
         );
-        assert_eq!(accounts.is_solvent("Alice", 75), Ok(75));
+        assert_eq!(accounts.is_solvent("Alice", 75), Ok(()));
     }
 }

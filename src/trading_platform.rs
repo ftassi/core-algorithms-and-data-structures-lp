@@ -43,22 +43,15 @@ impl TradingPlatform {
 
     /// Withdraw funds
     pub fn withdraw(&mut self, signer: &str, amount: u64) -> Result<Tx, ApplicationError> {
-        self.matching_engine
-            .bids
-            .values()
-            .flatten()
-            .filter(|partial_order| partial_order.signer == signer)
-            .try_fold(0u64, |amount, partial_order| {
-                amount.checked_add(partial_order.amount.checked_mul(partial_order.price)?)
-            })
-            .and_then(|reserved_amount| {
-                self.accounts
-                    .balance_of(signer)
-                    .ok()?
-                    .checked_sub(reserved_amount)?
-                    .checked_sub(amount)
-            })
-            .ok_or_else(|| ApplicationError::AccountUnderFunded(signer.to_string(), amount))
+        let reserved_amount = self.matching_engine.reserved_amount(signer);
+        self.accounts
+            .is_solvent(
+                signer,
+                amount.checked_add(reserved_amount).ok_or_else(|| {
+                    ApplicationError::AccountUnderFunded(signer.to_string(), amount)
+                })?,
+            )
+            .map_err(|_| ApplicationError::AccountUnderFunded(signer.to_string(), amount))
             .and_then(|_| self.accounts.withdraw(signer, amount))
     }
 

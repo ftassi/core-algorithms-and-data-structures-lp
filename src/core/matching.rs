@@ -35,6 +35,17 @@ impl MatchingEngine {
         }
     }
 
+    pub fn reserved_amount(&self, signer: &str) -> u64 {
+        self.bids
+            .values()
+            .flatten()
+            .filter(|partial_order| partial_order.signer == signer)
+            .try_fold(0u64, |amount, partial_order| {
+                amount.checked_add(partial_order.amount.checked_mul(partial_order.price)?)
+            })
+            .unwrap_or(0)
+    }
+
     /// Processes an [`Order`] and returns a [`Receipt`]
     /// This includes matching the order to whatever is in the current books and adding the remainder (if any) to the book for future matching.
     pub fn process(&mut self, order: Order) -> Result<Receipt, ApplicationError> {

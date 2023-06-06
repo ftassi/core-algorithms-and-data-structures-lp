@@ -43,7 +43,23 @@ impl TradingPlatform {
 
     /// Withdraw funds
     pub fn withdraw(&mut self, signer: &str, amount: u64) -> Result<Tx, ApplicationError> {
-        todo!();
+        self.matching_engine
+            .bids
+            .values()
+            .flatten()
+            .filter(|partial_order| partial_order.signer == signer)
+            .try_fold(0u64, |amount, partial_order| {
+                amount.checked_add(partial_order.amount.checked_mul(partial_order.price)?)
+            })
+            .and_then(|reserved_amount| {
+                self.accounts
+                    .balance_of(signer)
+                    .ok()?
+                    .checked_sub(reserved_amount)?
+                    .checked_sub(amount)
+            })
+            .ok_or_else(|| ApplicationError::AccountUnderFunded(signer.to_string(), amount))
+            .and_then(|_| self.accounts.withdraw(signer, amount))
     }
 
     /// Transfer funds between sender and recipient
@@ -127,6 +143,32 @@ mod tests {
         );
         assert!(trading_platform.matching_engine.asks.is_empty());
         assert!(trading_platform.matching_engine.bids.is_empty());
+    }
+
+    #[test]
+    fn test_TradingPlatform_requires_to_boh() {
+        let mut trading_platform = TradingPlatform::new();
+        trading_platform
+            .accounts
+            .deposit("ALICE", 50)
+            .expect("Unable to deposit");
+
+        trading_platform
+            .order(Order {
+                price: 30,
+                amount: 1,
+                side: Side::Buy,
+                signer: "ALICE".to_string(),
+            })
+            .expect("Unable to place order");
+
+        assert_eq!(
+            trading_platform.withdraw("ALICE", 30),
+            Err(ApplicationError::AccountUnderFunded(
+                "ALICE".to_string(),
+                30
+            )),
+        )
     }
 
     #[test]

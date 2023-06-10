@@ -30,15 +30,17 @@ impl TradingPlatform {
         let bids = self.matching_engine.bids.values().flatten().cloned();
         bids.chain(asks).collect()
     }
-
     /// Withdraw funds
     pub fn balance_of(&mut self, signer: &str) -> Result<&u64, ApplicationError> {
-        todo!();
+        self.accounts.balance_of(signer)
     }
 
     /// Deposit funds
     pub fn deposit(&mut self, signer: &str, amount: u64) -> Result<Tx, ApplicationError> {
-        todo!();
+        self.accounts.deposit(signer, amount).and_then(|tx| {
+            self.transactions.push(tx.clone());
+            Ok(tx)
+        })
     }
 
     /// Withdraw funds
@@ -53,6 +55,10 @@ impl TradingPlatform {
             )
             .map_err(|_| ApplicationError::AccountUnderFunded(signer.to_string(), amount))
             .and_then(|_| self.accounts.withdraw(signer, amount))
+            .and_then(|tx| {
+                self.transactions.push(tx.clone());
+                Ok(tx)
+            })
     }
 
     /// Transfer funds between sender and recipient
@@ -62,7 +68,13 @@ impl TradingPlatform {
         recipient: &str,
         amount: u64,
     ) -> Result<(Tx, Tx), ApplicationError> {
-        todo!();
+        self.accounts
+            .send(sender, recipient, amount)
+            .and_then(|(tx1, tx2)| {
+                self.transactions.push(tx1.clone());
+                self.transactions.push(tx2.clone());
+                Ok((tx1, tx2))
+            })
     }
 
     /// Process a given order and apply the outcome to the accounts involved. Note that there are very few safeguards in place.
@@ -73,12 +85,12 @@ impl TradingPlatform {
             .and_then(|receipt| {
                 receipt.matches.iter().for_each(|partial_order_match| {
                     match partial_order_match.side {
-                        Side::Buy => self.accounts.send(
+                        Side::Buy => self.send(
                             &partial_order_match.signer,
                             &order.signer,
                             partial_order_match.price * partial_order_match.amount,
                         ),
-                        Side::Sell => self.accounts.send(
+                        Side::Sell => self.send(
                             &order.signer,
                             &partial_order_match.signer,
                             partial_order_match.price * partial_order_match.amount,
@@ -118,7 +130,6 @@ mod tests {
     fn test_TradingPlatform_requires_solvency_in_order_to_buy() {
         let mut trading_platform = TradingPlatform::new();
         trading_platform
-            .accounts
             .deposit("ALICE", 50)
             .expect("Unable to deposit");
 
@@ -142,7 +153,6 @@ mod tests {
     fn test_TradingPlatform_requires_to_boh() {
         let mut trading_platform = TradingPlatform::new();
         trading_platform
-            .accounts
             .deposit("ALICE", 50)
             .expect("Unable to deposit");
 
@@ -168,7 +178,6 @@ mod tests {
     fn test_TradingPlatform_do_not_requires_solvency_in_order_to_sell() {
         let mut trading_platform = TradingPlatform::new();
         trading_platform
-            .accounts
             .deposit("ALICE", 50)
             .expect("Unable to deposit");
 
@@ -191,8 +200,8 @@ mod tests {
         let mut trading_platform = TradingPlatform::new();
 
         // Set up accounts
-        assert!(trading_platform.accounts.deposit("ALICE", 100).is_ok());
-        assert!(trading_platform.accounts.deposit("BOB", 100).is_ok());
+        assert!(trading_platform.deposit("ALICE", 100).is_ok());
+        assert!(trading_platform.deposit("BOB", 100).is_ok());
 
         let alice_receipt = trading_platform
             .order(Order {
@@ -229,8 +238,8 @@ mod tests {
         assert_eq!(trading_platform.matching_engine.bids.len(), 1);
 
         // Check the account balances
-        assert_eq!(trading_platform.accounts.balance_of("ALICE"), Ok(&110));
-        assert_eq!(trading_platform.accounts.balance_of("BOB"), Ok(&90));
+        assert_eq!(trading_platform.balance_of("ALICE"), Ok(&110));
+        assert_eq!(trading_platform.balance_of("BOB"), Ok(&90));
     }
 
     #[test]
@@ -238,8 +247,8 @@ mod tests {
         let mut trading_platform = TradingPlatform::new();
 
         // Set up accounts
-        assert!(trading_platform.accounts.deposit("ALICE", 100).is_ok());
-        assert!(trading_platform.accounts.deposit("BOB", 100).is_ok());
+        assert!(trading_platform.deposit("ALICE", 100).is_ok());
+        assert!(trading_platform.deposit("BOB", 100).is_ok());
 
         let alice_receipt = trading_platform
             .order(Order {
@@ -278,8 +287,8 @@ mod tests {
         assert!(trading_platform.matching_engine.bids.is_empty());
 
         // Check the account balances
-        assert_eq!(trading_platform.accounts.balance_of("ALICE"), Ok(&120));
-        assert_eq!(trading_platform.accounts.balance_of("BOB"), Ok(&80));
+        assert_eq!(trading_platform.balance_of("ALICE"), Ok(&120));
+        assert_eq!(trading_platform.balance_of("BOB"), Ok(&80));
     }
 
     #[test]
@@ -287,9 +296,9 @@ mod tests {
         let mut trading_platform = TradingPlatform::new();
 
         // Set up accounts
-        assert!(trading_platform.accounts.deposit("ALICE", 100).is_ok());
-        assert!(trading_platform.accounts.deposit("BOB", 100).is_ok());
-        assert!(trading_platform.accounts.deposit("CHARLIE", 100).is_ok());
+        assert!(trading_platform.deposit("ALICE", 100).is_ok());
+        assert!(trading_platform.deposit("BOB", 100).is_ok());
+        assert!(trading_platform.deposit("CHARLIE", 100).is_ok());
 
         let alice_receipt = trading_platform
             .order(Order {
@@ -348,9 +357,9 @@ mod tests {
         assert!(trading_platform.matching_engine.bids.is_empty());
 
         // Check account balances
-        assert_eq!(trading_platform.accounts.balance_of("ALICE"), Ok(&110));
-        assert_eq!(trading_platform.accounts.balance_of("BOB"), Ok(&80));
-        assert_eq!(trading_platform.accounts.balance_of("CHARLIE"), Ok(&110));
+        assert_eq!(trading_platform.balance_of("ALICE"), Ok(&110));
+        assert_eq!(trading_platform.balance_of("BOB"), Ok(&80));
+        assert_eq!(trading_platform.balance_of("CHARLIE"), Ok(&110));
     }
 
     #[test]
@@ -358,8 +367,8 @@ mod tests {
         let mut trading_platform = TradingPlatform::new();
 
         // Set up accounts
-        assert!(trading_platform.accounts.deposit("ALICE", 100).is_ok());
-        assert!(trading_platform.accounts.deposit("CHARLIE", 100).is_ok());
+        assert!(trading_platform.deposit("ALICE", 100).is_ok());
+        assert!(trading_platform.deposit("CHARLIE", 100).is_ok());
 
         let alice_receipt = trading_platform
             .order(Order {
@@ -407,8 +416,8 @@ mod tests {
         assert_eq!(trading_platform.matching_engine.asks.len(), 1);
         assert_eq!(trading_platform.matching_engine.bids.len(), 1);
         // Check account balances
-        assert_eq!(trading_platform.accounts.balance_of("ALICE"), Ok(&90));
-        assert_eq!(trading_platform.accounts.balance_of("CHARLIE"), Ok(&110));
+        assert_eq!(trading_platform.balance_of("ALICE"), Ok(&90));
+        assert_eq!(trading_platform.balance_of("CHARLIE"), Ok(&110));
     }
 
     #[test]
@@ -416,8 +425,8 @@ mod tests {
         let mut trading_platform = TradingPlatform::new();
 
         // Set up accounts
-        assert!(trading_platform.accounts.deposit("ALICE", 100).is_ok());
-        assert!(trading_platform.accounts.deposit("BOB", 100).is_ok());
+        assert!(trading_platform.deposit("ALICE", 100).is_ok());
+        assert!(trading_platform.deposit("BOB", 100).is_ok());
 
         let alice_receipt = trading_platform
             .order(Order {
@@ -443,7 +452,7 @@ mod tests {
         assert_eq!(trading_platform.orderbook().len(), 2);
 
         // Check the account balances
-        assert_eq!(trading_platform.accounts.balance_of("ALICE"), Ok(&100));
-        assert_eq!(trading_platform.accounts.balance_of("BOB"), Ok(&100));
+        assert_eq!(trading_platform.balance_of("ALICE"), Ok(&100));
+        assert_eq!(trading_platform.balance_of("BOB"), Ok(&100));
     }
 }

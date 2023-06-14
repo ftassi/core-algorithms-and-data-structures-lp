@@ -8,6 +8,7 @@ use crate::{
 };
 
 /// The core of the core: the [`TradingPlatform`]. Manages accounts, validates-, and orchestrates the processing of each order.
+#[derive(Debug)]
 pub struct TradingPlatform {
     matching_engine: MatchingEngine,
     accounts: Accounts,

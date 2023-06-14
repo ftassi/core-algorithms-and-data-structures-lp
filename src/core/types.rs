@@ -1,4 +1,4 @@
-use std::cmp::Reverse;
+use std::{cmp::Reverse, error::Error};
 
 /// Simplified side of a position as well as order.
 #[derive(Clone, PartialOrd, PartialEq, Eq, Debug, Ord)]
@@ -7,6 +7,17 @@ pub enum Side {
     Buy,
     /// Want to sell
     Sell,
+}
+
+impl TryFrom<String> for Side {
+    type Error = ();
+    fn try_from(string: String) -> Result<Self, ()> {
+        match string.to_lowercase().as_str() {
+            "buy" => Ok(Self::Buy),
+            "sell" => Ok(Self::Sell),
+            _ => Err(())
+        }
+    }
 }
 
 /// An order for a specified symbol to buy or sell an amount at a given price.
@@ -97,6 +108,16 @@ impl PartialOrder {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn side_should_parse_from_string() {
+        assert_eq!("buy".to_string().try_into(), Ok(Side::Buy));
+        assert_eq!("bUy".to_string().try_into(), Ok(Side::Buy));
+        assert_eq!("sell".to_string().try_into(), Ok(Side::Sell));
+        assert_eq!("seLl".to_string().try_into(), Ok(Side::Sell));
+
+        assert_eq!(Side::try_from("wrong".to_string()), Err(()));
+}
 
     #[test]
     fn sell_order_do_not_require_fund_to_be_fullfilled() {

@@ -16,27 +16,35 @@ fn read_from_stdin(label: &str) -> String {
     buffer.trim().to_owned()
 }
 
+// potremmo usare anyhow per aver un tipo di errore migliore
+fn read_order_from_stdin() -> Result<Order, String> {
+    let price = read_from_stdin("Price:").parse().map_err(|_| "Not a valid price")?;
+    let amount = read_from_stdin("Amount:").parse().map_err(|_| "Not a valid amount")?;
+    let side = read_from_stdin("Side:").try_into().map_err(|e| "Side must be SELL or BUY")?;
+    let signer = read_from_stdin("Signer:");
+
+    Ok(Order{
+        price,
+        amount,
+        side,
+        signer
+    })
+}
+
 fn main() {
     println!("Hello, accounting world!");
 
     let mut trading_platform = TradingPlatform::new();
     loop {
         let input = read_from_stdin(
-            "Choose operation [deposit, withdraw, send, print, quit], confirm with return:",
+            "Choose operation [order, orderbook, txtlog, deposit, withdraw, send, print, quit], confirm with return:",
         );
         match input.as_str() {
             "order" => {
-                // let price = read_from_stdin("Price:").parse();
-                // let amount = read_from_stdin("Amount:").parse();
-                // let side = read_from_stdin("Side:").parse();
-                // let signer = read_from_stdin("Signer:").parse();
-                //
-                // trading_platform.order(Order{
-                //     price,
-                //     amount,
-                //     side,
-                //     signer
-                // });
+                let _ = match read_order_from_stdin() {
+                   Ok(order) => {trading_platform.order(order); println!("Ok")}
+                   Err(e) => eprintln!("{:?}", e)
+                };
             }
             "orderbook" => {}
             "txlog" => {}
